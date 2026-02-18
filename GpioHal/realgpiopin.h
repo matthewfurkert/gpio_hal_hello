@@ -1,9 +1,8 @@
 #pragma once
 #include "igpiopin.h"
-#include <gpiod.h>
+#include <gpiod.h> // only included when USE_REAL_GPIO (libgpiod v2)
 
 namespace Gpio {
-
 class RealGpioPin : public IGpioPin
 {
     Q_OBJECT
@@ -13,11 +12,9 @@ public:
     bool value() const override;
     void setValue(bool value) override;
     bool isReal() const override { return true; }
-
 private:
     struct gpiod_chip* m_chip = nullptr;
     struct gpiod_line_request* m_request = nullptr;
-    unsigned int m_offset = 0;
+    unsigned int m_offset;
 };
-
 } // namespace Gpio
