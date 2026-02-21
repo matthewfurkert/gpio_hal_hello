@@ -21,6 +21,7 @@ qt_add_qml_module(appgpio_hal_hello
         SOURCES GpioHal/mockgpiopin.h GpioHal/mockgpiopin.cpp
         SOURCES GpioHal/realgpiopin.h GpioHal/realgpiopin.cpp
         SOURCES GpioHal/gpiofactory.h GpioHal/gpiofactory.cpp
+        RESOURCES go_fonts/Go-Bold-Italic.ttf go_fonts/Go-Bold.ttf go_fonts/Go-Italic.ttf go_fonts/Go-Medium-Italic.ttf go_fonts/Go-Medium.ttf go_fonts/Go-Regular.ttf go_fonts/README
 )
 
 # Optional: real GPIO (libgpiod) - off by default for easy desktop build

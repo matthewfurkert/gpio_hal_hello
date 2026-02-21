@@ -8,6 +8,11 @@ Window {
     visible: true
     title: "GPIO HAL Hello World (Mock on desktop)"
 
+    FontLoader {
+        id: goRegular
+        source: Qt.resolvedUrl("go_fonts/Go-Regular.ttf")
+    }
+
     Column {
         anchors.centerIn: parent
         spacing: 20

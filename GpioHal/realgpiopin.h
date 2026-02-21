@@ -1,6 +1,8 @@
 #pragma once
 #include "igpiopin.h"
-#include <gpiod.h> // only included when USE_REAL_GPIO (libgpiod v2)
+#ifdef USE_REAL_GPIO
+#include <gpiod.h>
+#endif
 
 namespace Gpio {
 class RealGpioPin : public IGpioPin
