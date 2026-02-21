@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
 
     // Create the HAL pin (offset 10 is just an example - change as needed)
-    Gpio::IGpioPin* gpioPin = Gpio::GpioFactory::createPin(10);
+    Gpio::IGpioPin* gpioPin = Gpio::GpioFactory::createPin(14);
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("gpioPin", gpioPin);
