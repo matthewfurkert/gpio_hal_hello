@@ -7,7 +7,7 @@ namespace Gpio {
 class GpioFactory
 {
 public:
-    static IGpioPin* createPin(unsigned int offset = 10);
+    static IGpioPin* createPin(unsigned int offset = 14);
 };
 
 } // namespace Gpio
