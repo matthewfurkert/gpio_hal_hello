@@ -16,22 +16,24 @@ qt_add_qml_module(appgpio_stmp_demo
     URI gpio_stmp_demo
     QML_FILES
         Main.qml
-        SOURCES gpio/igpiopin.h
-        SOURCES gpio/mockgpiopin.h gpio/mockgpiopin.cpp
-        SOURCES gpio/realgpiopin.h gpio/realgpiopin.cpp
-        SOURCES gpio/gpiofactory.h gpio/gpiofactory.cpp
         RESOURCES go_fonts/Go-Bold-Italic.ttf go_fonts/Go-Bold.ttf go_fonts/Go-Italic.ttf go_fonts/Go-Medium-Italic.ttf go_fonts/Go-Medium.ttf go_fonts/Go-Regular.ttf go_fonts/README
+        SOURCES gpio/gpiopin.h gpio/gpiopin.cpp
+        SOURCES gpio/igpiopin.h
+        SOURCES gpio/mockgpiopin.h
+        SOURCES gpio/realgpiopin.h gpio/realgpiopin.cpp
 )
 
-# Optional: real GPIO (libgpiod) - off by default for easy desktop build
-option(USE_REAL_GPIO "Use real libgpiod (requires libgpiod-dev on target/desktop)" OFF)
+target_include_directories(appgpio_stmp_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gpio)
 
-if(USE_REAL_GPIO)
+# Optional: real GPIO (libgpiod) - off by default for easy desktop build
+option(USE_REAL_DEV "Use real device (requires libgpiod-dev)" OFF)
+
+if(USE_REAL_DEV)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(LIBGPIOD REQUIRED libgpiod)
     target_link_libraries(appgpio_stmp_demo PRIVATE ${LIBGPIOD_LIBRARIES})
     target_include_directories(appgpio_stmp_demo PRIVATE ${LIBGPIOD_INCLUDE_DIRS})
-    target_compile_definitions(appgpio_stmp_demo PRIVATE USE_REAL_GPIO)
+    target_compile_definitions(appgpio_stmp_demo PRIVATE USE_REAL_DEV)
     message(STATUS "Building with REAL GPIO (libgpiod)")
 else()
     message(STATUS "Building with MOCK GPIO (perfect for Windows/WSL desktop)")

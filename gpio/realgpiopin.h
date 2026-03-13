@@ -1,22 +1,27 @@
-#pragma once
+#ifndef REALGPIOPIN_H
+#define REALGPIOPIN_H
 #include "igpiopin.h"
-#ifdef USE_REAL_GPIO
-#include <gpiod.h>
-#endif
+#include <QFile>
 
-namespace Gpio {
-class RealGpioPin : public IGpioPin
-{
-    Q_OBJECT
+class RealGpioPin : public IGpioPin {
 public:
-    explicit RealGpioPin(unsigned int offset, QObject* parent = nullptr);
+    RealGpioPin();
     ~RealGpioPin() override;
-    bool value() const override;
-    void setValue(bool value) override;
-    bool isReal() const override { return true; }
+
+    void write(bool value) override;
+    bool read() const override;
+    void setPinNumber(int pin) override;
+    bool setActive(bool active) override;
+
 private:
-    struct gpiod_chip* m_chip = nullptr;
-    struct gpiod_line_request* m_request = nullptr;
-    unsigned int m_offset;
+    int m_pin = -1;
+    bool m_active = false;
+    QFile m_valueFile;
+
+    bool exportPin();
+    bool unexportPin();
+    bool setDirectionOut();
+    QString gpioPath() const;
 };
-} // namespace Gpio
+
+#endif // REALGPIOPIN_H

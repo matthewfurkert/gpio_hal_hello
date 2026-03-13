@@ -1,121 +1,84 @@
 #include "realgpiopin.h"
 #include <QDebug>
+#include <QThread>
 
-#ifdef USE_REAL_GPIO
-#include <gpiod.h>
-#endif
+RealGpioPin::RealGpioPin() {}
 
-namespace Gpio {
-
-RealGpioPin::RealGpioPin(unsigned int offset, QObject* parent)
-    : IGpioPin(offset, parent)
-    , m_offset(offset)
-{
-#ifdef USE_REAL_GPIO
-    // Prefer explicit path for v2 compatibility (change if you need a different chip, e.g. "/dev/gpiochip4")
-    m_chip = gpiod_chip_open("/dev/gpiochip0");
-    if (!m_chip) {
-        qWarning() << "Failed to open /dev/gpiochip0";
-        return;
-    }
-
-    struct gpiod_request_config *req_cfg = gpiod_request_config_new();
-    if (req_cfg)
-        gpiod_request_config_set_consumer(req_cfg, "gpio_hal_hello");
-
-    struct gpiod_line_settings *settings = gpiod_line_settings_new();
-    if (!settings) {
-        qWarning() << "Failed to create line settings";
-        if (req_cfg) gpiod_request_config_free(req_cfg);
-        gpiod_chip_close(m_chip);
-        m_chip = nullptr;
-        return;
-    }
-
-    gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
-    gpiod_line_settings_set_output_value(settings, GPIOD_LINE_VALUE_INACTIVE); // initial value = false / low
-
-    struct gpiod_line_config *line_cfg = gpiod_line_config_new();
-    if (!line_cfg) {
-        qWarning() << "Failed to create line config";
-        gpiod_line_settings_free(settings);
-        if (req_cfg) gpiod_request_config_free(req_cfg);
-        gpiod_chip_close(m_chip);
-        m_chip = nullptr;
-        return;
-    }
-
-    if (gpiod_line_config_add_line_settings(line_cfg, &m_offset, 1, settings) < 0) {
-        qWarning() << "Failed to add line settings for offset" << m_offset;
-        gpiod_line_config_free(line_cfg);
-        gpiod_line_settings_free(settings);
-        if (req_cfg) gpiod_request_config_free(req_cfg);
-        gpiod_chip_close(m_chip);
-        m_chip = nullptr;
-        return;
-    }
-
-    m_request = gpiod_chip_request_lines(m_chip, req_cfg, line_cfg);
-
-    // Always free temporary objects
-    gpiod_line_config_free(line_cfg);
-    gpiod_line_settings_free(settings);
-    if (req_cfg)
-        gpiod_request_config_free(req_cfg);
-
-    if (m_request) {
-        qDebug() << "Real GPIO" << m_offset << "requested successfully (libgpiod v2)";
-    } else {
-        qWarning() << "Failed to request GPIO line" << m_offset;
-        gpiod_chip_close(m_chip);
-        m_chip = nullptr;
-    }
-#else
-    qWarning() << "RealGpioPin compiled without USE_REAL_GPIO - this should never happen";
-#endif
+RealGpioPin::~RealGpioPin() {
+    if (m_active) unexportPin();
 }
 
-RealGpioPin::~RealGpioPin()
-{
-#ifdef USE_REAL_GPIO
-    if (m_request) {
-        gpiod_line_request_release(m_request);
-        m_request = nullptr;
-    }
-    if (m_chip) {
-        gpiod_chip_close(m_chip);
-        m_chip = nullptr;
-    }
-#endif
+QString RealGpioPin::gpioPath() const {
+    return QString("/sys/class/gpio/gpio%1").arg(m_pin);
 }
 
-bool RealGpioPin::value() const
-{
-#ifdef USE_REAL_GPIO
-    if (m_request) {
-        int val = gpiod_line_request_get_value(m_request, m_offset);
-        if (val < 0) {
-            qWarning() << "Failed to get value for GPIO line" << m_offset;
-            return false;
-        }
-        return val == GPIOD_LINE_VALUE_ACTIVE;
+bool RealGpioPin::exportPin() {
+    QFile f("/sys/class/gpio/export");
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write(QByteArray::number(m_pin));
+        return true;
     }
-#endif
     return false;
 }
 
-void RealGpioPin::setValue(bool value)
-{
-#ifdef USE_REAL_GPIO
-    if (m_request) {
-        enum gpiod_line_value val = value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE;
-        int ret = gpiod_line_request_set_value(m_request, m_offset, val);
-        if (ret < 0) {
-            qWarning() << "Failed to set value for GPIO line" << m_offset;
-        }
-        emit valueChanged(value);
+bool RealGpioPin::unexportPin() {
+    QFile f("/sys/class/gpio/unexport");
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write(QByteArray::number(m_pin));
+        return true;
     }
-#endif
+    return false;
 }
 
-} // namespace Gpio
+bool RealGpioPin::setDirectionOut() {
+    QFile f(gpioPath() + "/direction");
+    if (f.open(QIODevice::WriteOnly)) {
+        f.write("out");
+        return true;
+    }
+    return false;
+}
+
+bool RealGpioPin::setActive(bool active) {
+    if (active == m_active) return true;
+
+    if (active) {
+        if (exportPin()) {
+            QThread::msleep(80); // kernel needs time
+            if (setDirectionOut()) {
+                m_active = true;
+                m_valueFile.setFileName(gpioPath() + "/value");
+                m_valueFile.open(QIODevice::WriteOnly);
+                return true;
+            }
+        }
+        qWarning() << "Failed to export GPIO" << m_pin;
+        return false;
+    } else {
+        unexportPin();
+        m_active = false;
+        m_valueFile.close();
+        return true;
+    }
+}
+
+void RealGpioPin::setPinNumber(int pin) {
+    if (m_pin == pin) return;
+    if (m_active) setActive(false);
+    m_pin = pin;
+}
+
+void RealGpioPin::write(bool value) {
+    if (!m_active || !m_valueFile.isOpen()) return;
+    m_valueFile.write(value ? "1" : "0");
+    m_valueFile.flush();
+}
+
+bool RealGpioPin::read() const {
+    if (!m_active) return false;
+    QFile f(gpioPath() + "/value");
+    if (f.open(QIODevice::ReadOnly)) {
+        return f.readAll().trimmed() == "1";
+    }
+    return false;
+}
