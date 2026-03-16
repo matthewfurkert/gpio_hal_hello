@@ -13,22 +13,24 @@ public:
     explicit RealGpio();
     ~RealGpio() override;
 
+#ifdef USE_REAL_DEV
     bool setChipNumber(int chip) override;
     bool setPinNumber(int pin) override;
     bool write(bool value) override;
     std::optional<bool> read() const override;
-
-private:
-    void openAndRequestLine();
-
-#ifdef USE_REAL_DEV
-    struct gpiod_chip *m_gpiodChip = nullptr;
-    struct gpiod_line_request *m_request = nullptr;
 #endif
 
+private:
+#ifdef USE_REAL_DEV
+    void openAndRequestLine();
+
+    struct gpiod_chip *m_gpiodChip = nullptr;
+    struct gpiod_line_request *m_request = nullptr;
+
     int m_chipNumber = -1;
-    unsigned int m_pinNumber = -1;
+    int m_pinNumber = -1;
     bool m_currentValue = false;
+#endif
 };
 
 #endif // REALGPIO_H

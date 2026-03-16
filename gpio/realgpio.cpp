@@ -20,83 +20,86 @@ RealGpio::~RealGpio()
 #endif
 }
 
+#ifdef USE_REAL_DEV
 bool RealGpio::setChipNumber(int chip)
 {
+    if (chip < 0) return false;
     if (m_chipNumber == chip) return true;
-    m_chipNumber = chip;
 
-#ifdef USE_REAL_DEV
+    m_chipNumber = chip;
     if (m_pinNumber >= 0 && !m_request) {
         openAndRequestLine();
-        if (!m_request) return false;
+        return m_request != nullptr;
     }
-#endif
     return true;
 }
+#endif
 
+#ifdef USE_REAL_DEV
 bool RealGpio::setPinNumber(int pin)
 {
     if (pin < 0) return false;
-    unsigned int newPin = static_cast<unsigned int>(pin);
-    if (newPin == m_pinNumber) return true;
+    if (pin == m_pinNumber) return true;
 
-    m_pinNumber = newPin;
-
-#ifdef USE_REAL_DEV
+    m_pinNumber = pin;
     if (m_chipNumber >= 0 && !m_request) {
         openAndRequestLine();
-        if (!m_request) return false;
+        return m_request != nullptr;
     }
-#endif
     return true;
 }
+#endif
 
+#ifdef USE_REAL_DEV
 bool RealGpio::write(bool value)
 {
     m_currentValue = value;
-#ifdef USE_REAL_DEV
+
     if (!m_request) {
         if (m_chipNumber >= 0 && m_pinNumber >= 0) {
             openAndRequestLine();
         }
         if (!m_request) {
-            qWarning() << "RealGpio: Cannot write - chip and pin not ready yet";
+            qWarning() << "RealGpio: Cannot write - chip" << m_chipNumber
+                       << "pin" << m_pinNumber << "not ready yet";
             return false;
         }
     }
-    enum gpiod_line_value val = value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE;
-    int ret = gpiod_line_request_set_value(m_request, m_pinNumber, val);
+
+    // IMPORTANT: offset inside request is ALWAYS 0 (1 line requested)
+    int ret = gpiod_line_request_set_value(m_request, 0,
+                                           value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
     if (ret < 0) {
         qWarning() << "Failed to set GPIO" << m_chipNumber << "/" << m_pinNumber;
         return false;
     }
-#endif
     return true;
 }
+#endif
 
+#ifdef USE_REAL_DEV
 std::optional<bool> RealGpio::read() const
 {
-#ifdef USE_REAL_DEV
-    if (m_request) {
-        int val = gpiod_line_request_get_value(m_request, m_pinNumber);
-        if (val < 0) {
-            qWarning() << "Failed to read GPIO" << m_chipNumber << "/" << m_pinNumber;
-            return {};
-        }
-        return val == GPIOD_LINE_VALUE_ACTIVE;
-    } else return {};
+    if (!m_request)
+        return {};
+
+    int val = gpiod_line_request_get_value(m_request, 0);  // always offset 0
+    if (val < 0) {
+        qWarning() << "Failed to read GPIO" << m_chipNumber << "/" << m_pinNumber;
+        return {};
+    }
+    return val == GPIOD_LINE_VALUE_ACTIVE;
 }
 #endif
 
+#ifdef USE_REAL_DEV
 void RealGpio::openAndRequestLine()
 {
-#ifdef USE_REAL_DEV
-    if (m_request || m_chipNumber < 0)
+    if (m_request || m_chipNumber < 0 || m_pinNumber < 0)
         return;
 
     QString chipPath = QString("/dev/gpiochip%1").arg(m_chipNumber);
     m_gpiodChip = gpiod_chip_open(chipPath.toStdString().c_str());
-
     if (!m_gpiodChip) {
         qWarning() << "Failed to open" << chipPath;
         return;
@@ -115,7 +118,8 @@ void RealGpio::openAndRequestLine()
     }
 
     gpiod_line_settings_set_direction(settings, GPIOD_LINE_DIRECTION_OUTPUT);
-    gpiod_line_settings_set_output_value(settings, m_currentValue ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
+    gpiod_line_settings_set_output_value(settings,
+                                         m_currentValue ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
 
     struct gpiod_line_config *line_cfg = gpiod_line_config_new();
     if (!line_cfg) {
@@ -127,7 +131,9 @@ void RealGpio::openAndRequestLine()
         return;
     }
 
-    if (gpiod_line_config_add_line_settings(line_cfg, &m_pinNumber, 1, settings) < 0) {
+    // Convert to unsigned only for the API call
+    unsigned int offset = static_cast<unsigned int>(m_pinNumber);
+    if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings) < 0) {
         qWarning() << "Failed to add line settings for pin" << m_pinNumber;
         gpiod_line_config_free(line_cfg);
         gpiod_line_settings_free(settings);
@@ -151,5 +157,5 @@ void RealGpio::openAndRequestLine()
         gpiod_chip_close(m_gpiodChip);
         m_gpiodChip = nullptr;
     }
-#endif
 }
+#endif
