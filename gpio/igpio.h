@@ -2,6 +2,10 @@
 #define IGPIO_H
 
 #include <optional>
+#include <iostream>
+#include <string>
+#include <cstring>   // strerror
+#include <cerrno>    // errno
 
 class IGpio {
 public:

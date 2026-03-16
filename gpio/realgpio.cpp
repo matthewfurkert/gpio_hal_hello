@@ -1,7 +1,4 @@
 #include "realgpio.h"
-#include <QDebug>
-#include <QString>
-#include <cstring>
 
 RealGpio::RealGpio()
 {
@@ -26,7 +23,6 @@ bool RealGpio::setChipNumber(int chip)
 {
     if (chip < 0) return false;
     if (m_chipNumber == chip) return true;
-
     m_chipNumber = chip;
     if (m_pinNumber >= 0 && !m_request) {
         openAndRequestLine();
@@ -41,7 +37,6 @@ bool RealGpio::setPinNumber(int pin)
 {
     if (pin < 0) return false;
     if (pin == m_pinNumber) return true;
-
     m_pinNumber = pin;
     if (m_chipNumber >= 0 && !m_request) {
         openAndRequestLine();
@@ -61,8 +56,8 @@ bool RealGpio::write(bool value)
             openAndRequestLine();
         }
         if (!m_request) {
-            qWarning() << "RealGpio: Cannot write - chip" << m_chipNumber
-                       << "pin" << m_pinNumber << "not ready yet";
+            std::cerr << "RealGpio: Cannot write - chip " << m_chipNumber
+                      << " pin " << m_pinNumber << " not ready yet" << std::endl;
             return false;
         }
     }
@@ -71,8 +66,8 @@ bool RealGpio::write(bool value)
     int ret = gpiod_line_request_set_value(m_request, offset,
                                            value ? GPIOD_LINE_VALUE_ACTIVE : GPIOD_LINE_VALUE_INACTIVE);
     if (ret < 0) {
-        qWarning() << "Failed to set GPIO" << m_chipNumber << "/" << m_pinNumber
-                   << "- error:" << strerror(errno);
+        std::cerr << "Failed to set GPIO " << m_chipNumber << "/" << m_pinNumber
+                  << " - error: " << strerror(errno) << std::endl;
         return false;
     }
     return true;
@@ -88,8 +83,8 @@ std::optional<bool> RealGpio::read() const
     unsigned int offset = static_cast<unsigned int>(m_pinNumber);
     int val = gpiod_line_request_get_value(m_request, offset);
     if (val < 0) {
-        qWarning() << "Failed to read GPIO" << m_chipNumber << "/" << m_pinNumber
-                   << "- error:" << strerror(errno);
+        std::cerr << "Failed to read GPIO " << m_chipNumber << "/" << m_pinNumber
+                  << " - error: " << strerror(errno) << std::endl;
         return {};
     }
     return val == GPIOD_LINE_VALUE_ACTIVE;
@@ -102,10 +97,10 @@ void RealGpio::openAndRequestLine()
     if (m_request || m_chipNumber < 0 || m_pinNumber < 0)
         return;
 
-    QString chipPath = QString("/dev/gpiochip%1").arg(m_chipNumber);
-    m_gpiodChip = gpiod_chip_open(chipPath.toStdString().c_str());
+    std::string chipPath = "/dev/gpiochip" + std::to_string(m_chipNumber);
+    m_gpiodChip = gpiod_chip_open(chipPath.c_str());
     if (!m_gpiodChip) {
-        qWarning() << "Failed to open" << chipPath;
+        std::cerr << "Failed to open " << chipPath << std::endl;
         return;
     }
 
@@ -115,7 +110,7 @@ void RealGpio::openAndRequestLine()
 
     struct gpiod_line_settings *settings = gpiod_line_settings_new();
     if (!settings) {
-        qWarning() << "Failed to create line settings";
+        std::cerr << "Failed to create line settings" << std::endl;
         gpiod_chip_close(m_gpiodChip);
         m_gpiodChip = nullptr;
         return;
@@ -127,7 +122,7 @@ void RealGpio::openAndRequestLine()
 
     struct gpiod_line_config *line_cfg = gpiod_line_config_new();
     if (!line_cfg) {
-        qWarning() << "Failed to create line config";
+        std::cerr << "Failed to create line config" << std::endl;
         gpiod_line_settings_free(settings);
         if (req_cfg) gpiod_request_config_free(req_cfg);
         gpiod_chip_close(m_gpiodChip);
@@ -135,10 +130,9 @@ void RealGpio::openAndRequestLine()
         return;
     }
 
-    // Convert to unsigned only for the API call
     unsigned int offset = static_cast<unsigned int>(m_pinNumber);
     if (gpiod_line_config_add_line_settings(line_cfg, &offset, 1, settings) < 0) {
-        qWarning() << "Failed to add line settings for pin" << m_pinNumber;
+        std::cerr << "Failed to add line settings for pin " << m_pinNumber << std::endl;
         gpiod_line_config_free(line_cfg);
         gpiod_line_settings_free(settings);
         if (req_cfg) gpiod_request_config_free(req_cfg);
@@ -155,9 +149,11 @@ void RealGpio::openAndRequestLine()
         gpiod_request_config_free(req_cfg);
 
     if (m_request) {
-        qDebug() << "Real GPIO requested successfully:" << m_chipNumber << "/" << m_pinNumber;
+        std::cerr << "Real GPIO requested successfully: " << m_chipNumber
+                  << "/" << m_pinNumber << std::endl;
     } else {
-        qWarning() << "Failed to request GPIO line" << m_chipNumber << "/" << m_pinNumber;
+        std::cerr << "Failed to request GPIO line " << m_chipNumber
+                  << "/" << m_pinNumber << std::endl;
         gpiod_chip_close(m_gpiodChip);
         m_gpiodChip = nullptr;
     }
